@@ -1,14 +1,11 @@
 package org.bimserver.statsbyggvalidator;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.util.Date;
 
 import org.bimserver.emf.IfcModelInterface;
 import org.bimserver.interfaces.objects.SActionState;
 import org.bimserver.interfaces.objects.SExtendedData;
+import org.bimserver.interfaces.objects.SExtendedDataSchema;
 import org.bimserver.interfaces.objects.SFile;
 import org.bimserver.interfaces.objects.SLongActionState;
 import org.bimserver.interfaces.objects.SObjectType;
@@ -37,11 +34,12 @@ import org.bimserver.plugins.services.ServicePlugin;
 import org.bimserver.shared.PublicInterfaceNotFoundException;
 import org.bimserver.shared.exceptions.ServerException;
 import org.bimserver.shared.exceptions.UserException;
-import org.bimserver.statsbyggvalidator.ValidationReport.Type;
+import org.bimserver.validationreport.Type;
+import org.bimserver.validationreport.ValidationReport;
+import org.codehaus.jettison.json.JSONException;
 import org.eclipse.emf.common.util.EList;
 
 import com.google.common.base.Charsets;
-import com.google.common.io.CharStreams;
 
 public class StatsbyggValidator extends ServicePlugin {
 
@@ -93,7 +91,8 @@ public class StatsbyggValidator extends ServicePlugin {
 		serviceDescriptor.setNotificationProtocol(AccessMethod.INTERNAL);
 		serviceDescriptor.setTrigger(Trigger.NEW_REVISION);
 		serviceDescriptor.setReadRevision(true);
-		serviceDescriptor.setWriteExtendedData("http://extend.bimserver.org/validationreport");
+		final String schemaNamespace = "http://extend.bimserver.org/validationreport";
+		serviceDescriptor.setWriteExtendedData(schemaNamespace);
 		registerNewRevisionHandler(serviceDescriptor, new NewRevisionHandler() {
 			@Override
 			public void newRevision(BimServerClientInterface bimServerClientInterface, long poid, long roid, SObjectType settings) throws ServerException, UserException {
@@ -107,29 +106,31 @@ public class StatsbyggValidator extends ServicePlugin {
 					state.setStart(startDate);
 					bimServerClientInterface.getRegistry().updateProgressTopic(topicId, state);
 					
+					SExtendedDataSchema schema = bimServerClientInterface.getServiceInterface().getExtendedDataSchemaByNamespace(schemaNamespace);
+					
 					IfcModelInterface model = bimServerClientInterface.getModel(poid, roid, true);
 					
 					ValidationReport validationReport = new ValidationReport();
-					InputStream resourceAsInputStream = getPluginManager().getPluginContext(StatsbyggValidator.this).getResourceAsInputStream("templates/header.html");
-					validationReport.setHeader(CharStreams.toString(new InputStreamReader(resourceAsInputStream)));
-					resourceAsInputStream.close();
-					InputStream resourceAsInputStream2 = getPluginManager().getPluginContext(StatsbyggValidator.this).getResourceAsInputStream("templates/footer.html");
-					validationReport.setFooter(CharStreams.toString(new InputStreamReader(resourceAsInputStream2)));
-					resourceAsInputStream2.close();
+//					InputStream resourceAsInputStream = getPluginManager().getPluginContext(StatsbyggValidator.this).getResourceAsInputStream("templates/header.html");
+//					String header = CharStreams.toString(new InputStreamReader(resourceAsInputStream));
+//					resourceAsInputStream.close();
+//					InputStream resourceAsInputStream2 = getPluginManager().getPluginContext(StatsbyggValidator.this).getResourceAsInputStream("templates/footer.html");
+//					String footer = CharStreams.toString(new InputStreamReader(resourceAsInputStream2));
+//					resourceAsInputStream2.close();
 					
 					processUnits(model, validationReport);
 					processIfcProject(model, validationReport);
 					processIfcObjectType(model, validationReport);
 					
 					SFile file = new SFile();
-					file.setMime("text/html; charset=utf-8");
-					file.setFilename("StatsbyggValidator.html");
-					file.setData(validationReport.toString().getBytes(Charsets.UTF_8));
-					
+					file.setMime("application/json; charset=utf-8");
+					file.setFilename("StatsbyggValidator.json");
+					file.setData(validationReport.toJson().toString(2).getBytes(Charsets.UTF_8));
 					file.setOid(bimServerClientInterface.getServiceInterface().uploadFile(file));
 					
 					SExtendedData extendedData = new SExtendedData();
 					extendedData.setTitle("StatsbyggValidator");
+					extendedData.setSchemaId(schema.getOid());
 					extendedData.setFileId(file.getOid());
 					
 					bimServerClientInterface.getServiceInterface().addExtendedDataToRevision(roid, extendedData);
@@ -137,11 +138,9 @@ public class StatsbyggValidator extends ServicePlugin {
 					bimServerClientInterface.getRegistry().unregisterProgressTopic(topicId);
 				} catch (PublicInterfaceNotFoundException e1) {
 					e1.printStackTrace();
-				} catch (FileNotFoundException e) {
-					e.printStackTrace();
-				} catch (IOException e) {
-					e.printStackTrace();
 				} catch (BimServerClientException e) {
+					e.printStackTrace();
+				} catch (JSONException e) {
 					e.printStackTrace();
 				}
 			}
@@ -204,7 +203,7 @@ public class StatsbyggValidator extends ServicePlugin {
 					validationReport.add(Type.ERROR, "Project Name", ifcProject.getName(), "Project name should be 5 digits");
 					return;
 				}
-				validationReport.add(Type.ERROR, "Project Name", "", "Project name should be 5 digits, no project found");
+				validationReport.add(Type.ERROR, "Project Name", "No Project", "Project name should be 5 digits, no project found");
 			}
 
 			/**
