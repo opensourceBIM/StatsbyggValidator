@@ -95,28 +95,23 @@ public class StatsbyggValidator extends ServicePlugin {
 		serviceDescriptor.setWriteExtendedData(schemaNamespace);
 		registerNewRevisionHandler(serviceDescriptor, new NewRevisionHandler() {
 			@Override
-			public void newRevision(BimServerClientInterface bimServerClientInterface, long poid, long roid, SObjectType settings) throws ServerException, UserException {
+			public void newRevision(BimServerClientInterface bimServerClientInterface, long poid, long roid, long soid, SObjectType settings) throws ServerException, UserException {
 				try {
-					Long topicId = bimServerClientInterface.getRegistry().registerProgressOnRevisionTopic(SProgressTopicType.RUNNING_SERVICE, poid, roid, "Running StatsbyggValidator");
+					String title = "Running StatsbyggValidator";
+					Long topicId = bimServerClientInterface.getRegistry().registerProgressOnRevisionTopic(SProgressTopicType.RUNNING_SERVICE, poid, roid, title);
 					SLongActionState state = new SLongActionState();
 					Date startDate = new Date();
 					state.setProgress(-1);
-					state.setTitle("Bezig...");
+					state.setTitle(title);
 					state.setState(SActionState.FINISHED);
 					state.setStart(startDate);
 					bimServerClientInterface.getRegistry().updateProgressTopic(topicId, state);
 					
 					SExtendedDataSchema schema = bimServerClientInterface.getServiceInterface().getExtendedDataSchemaByNamespace(schemaNamespace);
-					
+
 					IfcModelInterface model = bimServerClientInterface.getModel(poid, roid, true);
 					
 					ValidationReport validationReport = new ValidationReport();
-//					InputStream resourceAsInputStream = getPluginManager().getPluginContext(StatsbyggValidator.this).getResourceAsInputStream("templates/header.html");
-//					String header = CharStreams.toString(new InputStreamReader(resourceAsInputStream));
-//					resourceAsInputStream.close();
-//					InputStream resourceAsInputStream2 = getPluginManager().getPluginContext(StatsbyggValidator.this).getResourceAsInputStream("templates/footer.html");
-//					String footer = CharStreams.toString(new InputStreamReader(resourceAsInputStream2));
-//					resourceAsInputStream2.close();
 					
 					processUnits(model, validationReport);
 					processIfcProject(model, validationReport);
@@ -124,12 +119,12 @@ public class StatsbyggValidator extends ServicePlugin {
 					
 					SFile file = new SFile();
 					file.setMime("application/json; charset=utf-8");
-					file.setFilename("StatsbyggValidator.json");
+					file.setFilename("validationresults.json");
 					file.setData(validationReport.toJson().toString(2).getBytes(Charsets.UTF_8));
 					file.setOid(bimServerClientInterface.getServiceInterface().uploadFile(file));
 					
 					SExtendedData extendedData = new SExtendedData();
-					extendedData.setTitle("StatsbyggValidator");
+					extendedData.setTitle("Statsbygg Validation Report");
 					extendedData.setSchemaId(schema.getOid());
 					extendedData.setFileId(file.getOid());
 					
@@ -163,7 +158,7 @@ public class StatsbyggValidator extends ServicePlugin {
 				for (IfcRelDefines ifcRelDefines : isDefinedBy) {
 					if (ifcRelDefines instanceof IfcRelDefinesByType) {
 						if (ifcRelDefinesByType != null) {
-							validationReport.addError(getName(ifcObject), "too many IfcRelDefinesByType found");
+							validationReport.add(Type.ERROR, ifcObject.getOid(), getName(ifcObject), "too many IfcRelDefinesByType found", "");
 							return;
 						}
 						ifcRelDefinesByType = (IfcRelDefinesByType)ifcRelDefines;
@@ -171,12 +166,12 @@ public class StatsbyggValidator extends ServicePlugin {
 				}
 				if (ifcRelDefinesByType != null) {
 					if (ifcRelDefinesByType.getRelatingType() != null) {
-						validationReport.addSuccess(getName(ifcObject), "Valid");
+						validationReport.add(Type.SUCCESS, ifcObject.getOid(), getName(ifcObject), "Valid", "");
 					} else {
-						validationReport.addError(getName(ifcObject), "no RelatingType found");
+						validationReport.add(Type.ERROR, ifcObject.getOid(), getName(ifcObject), "no RelatingType found", "");
 					}
 				} else {
-					validationReport.addError(getName(ifcObject), "no IfcRelDefinesByType found");
+					validationReport.add(Type.ERROR, ifcObject.getOid(), getName(ifcObject), "no IfcRelDefinesByType found", "");
 				}
 			}
 
@@ -195,15 +190,15 @@ public class StatsbyggValidator extends ServicePlugin {
 					if (ifcProject.getName().trim().length() == 5) {
 						try {
 							Integer.parseInt(ifcProject.getName().trim());
-							validationReport.add(Type.SUCCESS, "Project Name", ifcProject.getName(), "Project name should be 5 digits");
+							validationReport.add(Type.SUCCESS, ifcProject.getOid(), "Project Name", ifcProject.getName(), "Project name should be 5 digits");
 							return;
 						} catch (NumberFormatException e) {
 						}
 					}
-					validationReport.add(Type.ERROR, "Project Name", ifcProject.getName(), "Project name should be 5 digits");
+					validationReport.add(Type.ERROR, ifcProject.getOid(), "Project Name", ifcProject.getName(), "Project name should be 5 digits");
 					return;
 				}
-				validationReport.add(Type.ERROR, "Project Name", "No Project", "Project name should be 5 digits, no project found");
+				validationReport.add(Type.ERROR, -1, "Project Name", "No Project", "Project name should be 5 digits, no project found");
 			}
 
 			/**
@@ -221,51 +216,51 @@ public class StatsbyggValidator extends ServicePlugin {
 							switch (ifcSIUnit.getUnitType()) {
 							case LENGTHUNIT:
 								if (ifcSIUnit.getPrefix() != IfcSIPrefix.MILLI || ifcSIUnit.getName() != IfcSIUnitName.METRE) {
-									validationReport.add(Type.ERROR, "Length Unit", (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL ? ifcSIUnit.getPrefix().name() + " " : "") + ifcSIUnit.getName().name(), IfcSIPrefix.MILLI.name() + " " + IfcSIUnitName.METRE.name());
+									validationReport.add(Type.ERROR, ifcSIUnit.getOid(), "Length Unit", (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL ? ifcSIUnit.getPrefix().name() + " " : "") + ifcSIUnit.getName().name(), IfcSIPrefix.MILLI.name() + " " + IfcSIUnitName.METRE.name());
 								} else {
-									validationReport.add(Type.SUCCESS, "Length Unit", (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL ? ifcSIUnit.getPrefix().name() + " " : "") + ifcSIUnit.getName().name(), IfcSIPrefix.MILLI.name() + " " + IfcSIUnitName.METRE.name());
+									validationReport.add(Type.SUCCESS, ifcSIUnit.getOid(), "Length Unit", (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL ? ifcSIUnit.getPrefix().name() + " " : "") + ifcSIUnit.getName().name(), IfcSIPrefix.MILLI.name() + " " + IfcSIUnitName.METRE.name());
 								}
 								break;
 							case AREAUNIT:
 								if (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL || ifcSIUnit.getName() != IfcSIUnitName.SQUARE_METRE) {
-									validationReport.add(Type.ERROR, "Area Unit", (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL ? ifcSIUnit.getPrefix().name() + " " : "") + ifcSIUnit.getName().name(), IfcSIUnitName.SQUARE_METRE.name());
+									validationReport.add(Type.ERROR, ifcSIUnit.getOid(), "Area Unit", (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL ? ifcSIUnit.getPrefix().name() + " " : "") + ifcSIUnit.getName().name(), IfcSIUnitName.SQUARE_METRE.name());
 								} else {
-									validationReport.add(Type.SUCCESS, "Area Unit", (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL ? ifcSIUnit.getPrefix().name() + " " : "") + ifcSIUnit.getName().name(), IfcSIUnitName.SQUARE_METRE.name());
+									validationReport.add(Type.SUCCESS, ifcSIUnit.getOid(), "Area Unit", (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL ? ifcSIUnit.getPrefix().name() + " " : "") + ifcSIUnit.getName().name(), IfcSIUnitName.SQUARE_METRE.name());
 								}
 								break;
 							case VOLUMEUNIT:
 								if (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL || ifcSIUnit.getName() != IfcSIUnitName.CUBIC_METRE) {
-									validationReport.add(Type.ERROR, "Volume Unit", (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL ? ifcSIUnit.getPrefix().name() + " " : "") + ifcSIUnit.getName().name(), IfcSIUnitName.CUBIC_METRE.name());
+									validationReport.add(Type.ERROR, ifcSIUnit.getOid(), "Volume Unit", (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL ? ifcSIUnit.getPrefix().name() + " " : "") + ifcSIUnit.getName().name(), IfcSIUnitName.CUBIC_METRE.name());
 								} else {
-									validationReport.add(Type.SUCCESS, "Volume Unit", (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL ? ifcSIUnit.getPrefix().name() + " " : "") + ifcSIUnit.getName().name(), IfcSIUnitName.CUBIC_METRE.name());
+									validationReport.add(Type.SUCCESS, ifcSIUnit.getOid(), "Volume Unit", (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL ? ifcSIUnit.getPrefix().name() + " " : "") + ifcSIUnit.getName().name(), IfcSIUnitName.CUBIC_METRE.name());
 								}
 								break;
 							case SOLIDANGLEUNIT:
 								if (ifcSIUnit.getName() != IfcSIUnitName.RADIAN) {
-									validationReport.add(Type.ERROR, "Solid Angle Unit", ifcSIUnit.getName().name(), IfcSIUnitName.RADIAN.name());
+									validationReport.add(Type.ERROR, ifcSIUnit.getOid(), "Solid Angle Unit", ifcSIUnit.getName().name(), IfcSIUnitName.RADIAN.name());
 								} else {
-									validationReport.add(Type.SUCCESS, "Solid Angle Unit", ifcSIUnit.getName().name(), IfcSIUnitName.RADIAN.name());
+									validationReport.add(Type.SUCCESS, ifcSIUnit.getOid(), "Solid Angle Unit", ifcSIUnit.getName().name(), IfcSIUnitName.RADIAN.name());
 								}
 								break;
 							case MASSUNIT:
 								if (ifcSIUnit.getPrefix() != IfcSIPrefix.KILO || ifcSIUnit.getName() != IfcSIUnitName.GRAM) {
-									validationReport.add(Type.ERROR, "Mass Unit", (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL ? ifcSIUnit.getPrefix().name() + " " : "") + ifcSIUnit.getName().name(), IfcSIPrefix.KILO.name() + " " + IfcSIUnitName.GRAM.name());
+									validationReport.add(Type.ERROR, ifcSIUnit.getOid(), "Mass Unit", (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL ? ifcSIUnit.getPrefix().name() + " " : "") + ifcSIUnit.getName().name(), IfcSIPrefix.KILO.name() + " " + IfcSIUnitName.GRAM.name());
 								} else {
-									validationReport.add(Type.SUCCESS, "Mass Unit", (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL ? ifcSIUnit.getPrefix().name() + " " : ""), IfcSIPrefix.KILO.name() + " " + IfcSIUnitName.GRAM.name());
+									validationReport.add(Type.SUCCESS, ifcSIUnit.getOid(), "Mass Unit", (ifcSIUnit.getPrefix() != IfcSIPrefix.NULL ? ifcSIUnit.getPrefix().name() + " " : ""), IfcSIPrefix.KILO.name() + " " + IfcSIUnitName.GRAM.name());
 								}
 								break;
 							case TIMEUNIT:
 								if (ifcSIUnit.getName() != IfcSIUnitName.SECOND) {
-									validationReport.add(Type.ERROR, "Time Unit", ifcSIUnit.getName().name(), IfcSIUnitName.SECOND.name());
+									validationReport.add(Type.ERROR, ifcSIUnit.getOid(), "Time Unit", ifcSIUnit.getName().name(), IfcSIUnitName.SECOND.name());
 								} else {
-									validationReport.add(Type.SUCCESS, "Time Unit", ifcSIUnit.getName().name(), IfcSIUnitName.SECOND.name());
+									validationReport.add(Type.SUCCESS, ifcSIUnit.getOid(), "Time Unit", ifcSIUnit.getName().name(), IfcSIUnitName.SECOND.name());
 								}
 								break;
 							case LUMINOUSFLUXUNIT:
 								if (ifcSIUnit.getName() != IfcSIUnitName.LUMEN) {
-									validationReport.add(Type.ERROR, "Luminous Flux Unit", ifcSIUnit.getName().name(), IfcSIUnitName.LUMEN.name());
+									validationReport.add(Type.ERROR, ifcSIUnit.getOid(), "Luminous Flux Unit", ifcSIUnit.getName().name(), IfcSIUnitName.LUMEN.name());
 								} else {
-									validationReport.add(Type.SUCCESS, "Luminous Flux Unit", ifcSIUnit.getName().name(), IfcSIUnitName.LUMEN.name());
+									validationReport.add(Type.SUCCESS, ifcSIUnit.getOid(), "Luminous Flux Unit", ifcSIUnit.getName().name(), IfcSIUnitName.LUMEN.name());
 								}
 								break;
 							// TODO Angle and Temperature seem not to be in IFC
