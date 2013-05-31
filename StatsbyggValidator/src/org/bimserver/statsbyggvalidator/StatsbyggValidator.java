@@ -128,7 +128,7 @@ public class StatsbyggValidator extends ServicePlugin {
 					extendedData.setSchemaId(schema.getOid());
 					extendedData.setFileId(file.getOid());
 					
-					bimServerClientInterface.getServiceInterface().addExtendedDataToRevision(roid, extendedData);
+					bimServerClientInterface.getBimsie1ServiceInterface().addExtendedDataToRevision(roid, extendedData);
 					
 					bimServerClientInterface.getRegistry().unregisterProgressTopic(topicId);
 				} catch (PublicInterfaceNotFoundException e1) {
