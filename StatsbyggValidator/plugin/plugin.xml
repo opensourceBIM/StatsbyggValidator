@@ -2,6 +2,10 @@
 <PluginDescriptor>
 	<PluginImplementation>
 		<interfaceClass>org.bimserver.plugins.services.ServicePlugin</interfaceClass>
-		<implementationClass>org.bimserver.statsbyggvalidator.StatsbyggValidator</implementationClass>
+		<implementationClass>org.bimserver.statsbyggvalidator.StatsbyggValidatorService</implementationClass>
+	</PluginImplementation>
+	<PluginImplementation>
+		<interfaceClass>org.bimserver.plugins.services.ServicePlugin</interfaceClass>
+		<implementationClass>org.bimserver.statsbyggvalidator.StatsbyggValidationHighlighterService</implementationClass>
 	</PluginImplementation>
 </PluginDescriptor>
