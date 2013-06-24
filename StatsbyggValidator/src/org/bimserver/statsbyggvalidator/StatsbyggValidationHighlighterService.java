@@ -3,22 +3,11 @@ package org.bimserver.statsbyggvalidator;
 import java.util.Date;
 
 import org.bimserver.emf.IfcModelInterface;
+import org.bimserver.emf.IfcModelInterfaceException;
 import org.bimserver.interfaces.objects.SActionState;
-import org.bimserver.interfaces.objects.SExtendedData;
-import org.bimserver.interfaces.objects.SExtendedDataSchema;
-import org.bimserver.interfaces.objects.SFile;
 import org.bimserver.interfaces.objects.SLongActionState;
 import org.bimserver.interfaces.objects.SObjectType;
 import org.bimserver.interfaces.objects.SProgressTopicType;
-import org.bimserver.models.ifc2x3tc1.IfcObject;
-import org.bimserver.models.ifc2x3tc1.IfcProject;
-import org.bimserver.models.ifc2x3tc1.IfcRelDefines;
-import org.bimserver.models.ifc2x3tc1.IfcRelDefinesByType;
-import org.bimserver.models.ifc2x3tc1.IfcSIPrefix;
-import org.bimserver.models.ifc2x3tc1.IfcSIUnit;
-import org.bimserver.models.ifc2x3tc1.IfcSIUnitName;
-import org.bimserver.models.ifc2x3tc1.IfcUnit;
-import org.bimserver.models.ifc2x3tc1.IfcUnitAssignment;
 import org.bimserver.models.log.AccessMethod;
 import org.bimserver.models.store.ObjectDefinition;
 import org.bimserver.models.store.ServiceDescriptor;
@@ -34,12 +23,7 @@ import org.bimserver.plugins.services.ServicePlugin;
 import org.bimserver.shared.PublicInterfaceNotFoundException;
 import org.bimserver.shared.exceptions.ServerException;
 import org.bimserver.shared.exceptions.UserException;
-import org.bimserver.validationreport.Type;
 import org.bimserver.validationreport.ValidationReport;
-import org.codehaus.jettison.json.JSONException;
-import org.eclipse.emf.common.util.EList;
-
-import com.google.common.base.Charsets;
 
 public class StatsbyggValidationHighlighterService extends ServicePlugin {
 
@@ -102,7 +86,7 @@ public class StatsbyggValidationHighlighterService extends ServicePlugin {
 					Date startDate = new Date();
 					state.setProgress(-1);
 					state.setTitle(title);
-					state.setState(SActionState.FINISHED);
+					state.setState(SActionState.STARTED);
 					state.setStart(startDate);
 					bimServerClientInterface.getRegistry().updateProgressTopic(topicId, state);
 					
@@ -110,11 +94,24 @@ public class StatsbyggValidationHighlighterService extends ServicePlugin {
 					
 					StandsbyggValidator standsbyggValidator = new StandsbyggValidator();
 					ValidationReport validationReport = standsbyggValidator.validate(model);
+					validationReport.applyToModel(model);
+					
+					model.commit("Highlighted Statsbygg Validation");
+					
+					state = new SLongActionState();
+					state.setProgress(100);
+					state.setTitle(title);
+					state.setState(SActionState.FINISHED);
+					state.setStart(startDate);
+					state.setEnd(new Date());
+					bimServerClientInterface.getRegistry().updateProgressTopic(topicId, state);
 					
 					bimServerClientInterface.getRegistry().unregisterProgressTopic(topicId);
 				} catch (PublicInterfaceNotFoundException e1) {
 					e1.printStackTrace();
 				} catch (BimServerClientException e) {
+					e.printStackTrace();
+				} catch (IfcModelInterfaceException e) {
 					e.printStackTrace();
 				}
 			}

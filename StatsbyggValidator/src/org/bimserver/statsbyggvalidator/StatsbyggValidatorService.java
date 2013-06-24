@@ -18,20 +18,20 @@ import org.bimserver.models.store.Trigger;
 import org.bimserver.plugins.PluginConfiguration;
 import org.bimserver.plugins.PluginException;
 import org.bimserver.plugins.PluginManager;
-import org.bimserver.plugins.services.BimServerClientException;
 import org.bimserver.plugins.services.BimServerClientInterface;
 import org.bimserver.plugins.services.NewRevisionHandler;
 import org.bimserver.plugins.services.ServicePlugin;
-import org.bimserver.shared.PublicInterfaceNotFoundException;
 import org.bimserver.shared.exceptions.ServerException;
 import org.bimserver.shared.exceptions.UserException;
 import org.bimserver.validationreport.ValidationReport;
-import org.codehaus.jettison.json.JSONException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Charsets;
 
 public class StatsbyggValidatorService extends ServicePlugin {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(StatsbyggValidatorService.class);
 	private boolean initialized;
 
 	@Override
@@ -92,7 +92,7 @@ public class StatsbyggValidatorService extends ServicePlugin {
 					Date startDate = new Date();
 					state.setProgress(-1);
 					state.setTitle(title);
-					state.setState(SActionState.FINISHED);
+					state.setState(SActionState.STARTED);
 					state.setStart(startDate);
 					bimServerClientInterface.getRegistry().updateProgressTopic(topicId, state);
 					
@@ -115,14 +115,18 @@ public class StatsbyggValidatorService extends ServicePlugin {
 					extendedData.setFileId(file.getOid());
 					
 					bimServerClientInterface.getBimsie1ServiceInterface().addExtendedDataToRevision(roid, extendedData);
-					
+
+					state = new SLongActionState();
+					state.setProgress(100);
+					state.setTitle(title);
+					state.setState(SActionState.FINISHED);
+					state.setStart(startDate);
+					state.setEnd(new Date());
+					bimServerClientInterface.getRegistry().updateProgressTopic(topicId, state);
+
 					bimServerClientInterface.getRegistry().unregisterProgressTopic(topicId);
-				} catch (PublicInterfaceNotFoundException e1) {
-					e1.printStackTrace();
-				} catch (BimServerClientException e) {
-					e.printStackTrace();
-				} catch (JSONException e) {
-					e.printStackTrace();
+				} catch (Exception e) {
+					LOGGER.error("", e);
 				}
 			}
 		});
