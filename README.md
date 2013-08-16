@@ -1,4 +1,5 @@
 StatsbyggValidator
 ==================
 
-Validator for Statsbygg rules
+Validator for Statsbygg IFC rules. Works with the BIMSie standard API for BIM in the cloud.
+
